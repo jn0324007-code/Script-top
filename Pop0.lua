@@ -1,7 +1,7 @@
 --[[
-    Script: Sasiperere.lua (Versão com Aimbot, Silent Aim e ESP Integrados)
-    [!] MÓDULO ESP: A lógica do ESP foi extraída de "árduo.lua" e integrada
-    a este script, com novos botões na UI para controle total.
+    Script: Sasiperere.lua (Versão com Aimbot, Silent Aim, ESP e Correção de Erro)
+    [!] CORREÇÃO DE ERRO: Corrigida a ordem das variáveis de retorno da função WorldToScreenPoint,
+    o que causava o erro "attempt to index boolean with 'X'".
 ]]
 
 --================================================================================
@@ -51,7 +51,7 @@ local espObjects = {}
 -- CRIAÇÃO DA INTERFACE GRÁFICA (GUI)
 --================================================================================
 local mainGui = Instance.new("ScreenGui", CoreGui); mainGui.Name = "DeleteMob_GUI_Final"; mainGui.ResetOnSpawn = false
-local mainFrame = Instance.new("Frame", mainGui); mainFrame.Name = "DeleteMobF"; mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25); mainFrame.Position = UDim2.new(0.5, -200, 0.5, -200); mainFrame.Size = UDim2.new(0, 400, 0, 550); mainFrame.Draggable = true; mainFrame.Active = true; mainFrame.Visible = true; mainFrame.ClipsDescendants = true
+local mainFrame = Instance.new("Frame", mainGui); mainFrame.Name = "DeleteMobF"; mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25); mainFrame.Position = UDim2.new(0.5, -200, 0.5, -275); mainFrame.Size = UDim2.new(0, 400, 0, 550); mainFrame.Draggable = true; mainFrame.Active = true; mainFrame.Visible = true; mainFrame.ClipsDescendants = true
 local frameCorner = Instance.new("UICorner", mainFrame); frameCorner.CornerRadius = UDim.new(0, 8); local frameStroke = Instance.new("UIStroke", mainFrame); frameStroke.Color = Color3.fromRGB(80, 80, 80); frameStroke.Thickness = 1
 local header = Instance.new("Frame", mainFrame); header.BackgroundColor3 = Color3.fromRGB(35, 35, 35); header.Size = UDim2.new(1, 0, 0, 35); local headerStroke = Instance.new("UIStroke", header); headerStroke.Color = Color3.fromRGB(80, 80, 80); headerStroke.Thickness = 1
 local titleLabel = Instance.new("TextLabel", header); titleLabel.BackgroundTransparency = 1; titleLabel.Position = UDim2.new(0.05, 0, 0, 0); titleLabel.Size = UDim2.new(0.9, 0, 1, 0); titleLabel.Font = Enum.Font.GothamBold; titleLabel.Text = "DeleteMob | Cheat Engine"; titleLabel.TextColor3 = Color3.fromRGB(17, 223, 255); titleLabel.TextSize = 20; titleLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -300,7 +300,7 @@ local function scanWorkspaceForEsp()
             elseif v:FindFirstAncestor("DroppedItems") then
                 startEsp(v, "Dead")
             end
-        elseif v.Parent == workspace:FindFirstChild("NoCollision"):FindFirstChild("ExitLocations") then
+        elseif v.Parent and v.Parent == workspace:FindFirstChild("NoCollision"):FindFirstChild("ExitLocations") then
             startEsp(v, "Extract")
         elseif v:FindFirstAncestor("Containers") and v:IsA("MeshPart") then
             if v.Parent and v.Parent:IsA("Model") then
@@ -374,7 +374,10 @@ RunService.RenderStepped:Connect(function()
         end
         
         local metersdist = (LocalPlayer.Character and LocalPlayer.Character.PrimaryPart) and math.floor((LocalPlayer.Character.PrimaryPart.Position - obj.Position).Magnitude * 0.3336) or 0
-        local onScreen, screenPos = Camera:WorldToScreenPoint(obj.Position)
+        
+        -- [[ INÍCIO DA CORREÇÃO ]] --
+        local screenPos, onScreen = Camera:WorldToScreenPoint(obj.Position)
+        -- [[ FIM DA CORREÇÃO ]] --
 
         local isVisible = Settings.EspEnabled and onScreen and isHumanoid and metersdist < Settings.EspRenderDistance
         
@@ -404,7 +407,7 @@ RunService.RenderStepped:Connect(function()
                     if info.otype == "Extract" then dobj.Text = obj.Name
                     elseif info.otype == "Dead" then dobj.Text = obj.Parent.Name .. " [DEAD]"
                     else dobj.Text = obj.Parent.Name end
-                elseif info.type == "HP" and Settings.EspHealth and info.otype ~= "Dead" then
+                elseif info.type == "HP" and Settings.EspHealth and info.otype ~= "Dead" and obj.Parent:FindFirstChild("Humanoid") then
                     dobj.Position = resultpos - Vector2.new(0, 30)
                     dobj.Text = math.floor(obj.Parent.Humanoid.Health) .. "HP"
                 elseif info.type == "Distance" and Settings.EspDistance then
@@ -415,8 +418,7 @@ RunService.RenderStepped:Connect(function()
                      dobj.Position = resultpos + Vector2.new(0, 15)
                      local hotgun = "None"
                      if info.otype == "Loot" then
-                         -- Para loot, mostrar valor
-                         hotgun = "" -- Implementar se necessário
+                         hotgun = "" 
                      else
                          for _, v in ipairs(obj.Parent:GetChildren()) do
                              if v:FindFirstChild("ItemRoot") then
@@ -432,4 +434,4 @@ RunService.RenderStepped:Connect(function()
             end
         end
     end
-end)
+end)```
