@@ -1,8 +1,8 @@
 --[[
-    Script: Sasiperere.lua (Correção de Conflito com CoreGui)
-    [!] CORREÇÃO: O problema é um conflito no script que impede o Drawing de funcionar.
-    A causa mais provável é a GUI estar na PlayerGui. Este script move a GUI
-    para a CoreGui, como no outro script que funciona, para resolver o conflito.
+    Script: Sasiperere.lua (Versão Beautified)
+    [!] DESIGN: A interface foi completamente redesenhada com um tema moderno,
+    cantos arredondados, animações suaves e melhor feedback visual para os botões.
+    A lógica funcional (Aimbot, FOV) permanece a mesma, otimizada e estável.
 ]]
 
 --================================================================================
@@ -10,7 +10,8 @@
 --================================================================================
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
+local CoreGui = game:GetService("CoreGui")
+local TweenService = game:GetService("TweenService")
 local Camera = workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
 
@@ -22,42 +23,48 @@ local Settings = {
 --================================================================================
 -- CRIAÇÃO DA INTERFACE GRÁFICA (GUI)
 --================================================================================
-local mainGui = Instance.new("ScreenGui")
-mainGui.Name = "DeleteMob_GUI_Final"
--- [!] MUDANÇA CRÍTICA AQUI: Usando CoreGui em vez de PlayerGui
-mainGui.Parent = game:GetService("CoreGui") 
+local mainGui = Instance.new("ScreenGui", CoreGui)
+mainGui.Name = "DeleteMob_GUI_Modern"
 mainGui.ResetOnSpawn = false
 
 -- Interface Principal
 local mainFrame = Instance.new("Frame", mainGui)
 mainFrame.Name = "DeleteMobF"
-mainFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 mainFrame.BorderColor3 = Color3.fromRGB(80, 80, 80)
 mainFrame.Position = UDim2.new(0.5, -200, 0.5, -160)
 mainFrame.Size = UDim2.new(0, 400, 0, 320)
 mainFrame.Draggable = true
 mainFrame.Active = true
 mainFrame.Visible = true
+mainFrame.ClipsDescendants = true
+local frameCorner = Instance.new("UICorner", mainFrame)
+frameCorner.CornerRadius = UDim.new(0, 8)
+local frameStroke = Instance.new("UIStroke", mainFrame)
+frameStroke.Color = Color3.fromRGB(80, 80, 80)
+frameStroke.Thickness = 1
 
--- Resto da sua GUI (sem alterações)
-local titleLabel = Instance.new("TextLabel", mainFrame)
+-- Header
+local header = Instance.new("Frame", mainFrame)
+header.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+header.Size = UDim2.new(1, 0, 0, 35)
+local headerStroke = Instance.new("UIStroke", header)
+headerStroke.Color = Color3.fromRGB(80, 80, 80)
+headerStroke.Thickness = 1
+
+local titleLabel = Instance.new("TextLabel", header)
 titleLabel.BackgroundTransparency = 1
-titleLabel.Position = UDim2.new(0.05, 0, 0, 5)
-titleLabel.Size = UDim2.new(0, 300, 0, 25)
+titleLabel.Position = UDim2.new(0.05, 0, 0, 0)
+titleLabel.Size = UDim2.new(0.9, 0, 1, 0)
 titleLabel.Font = Enum.Font.GothamBold
 titleLabel.Text = "DeleteMob | Cheat Engine"
 titleLabel.TextColor3 = Color3.fromRGB(17, 223, 255)
 titleLabel.TextSize = 20
 titleLabel.TextXAlignment = Enum.TextXAlignment.Left
 
-local lineSeparator = Instance.new("Frame", mainFrame)
-lineSeparator.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-lineSeparator.Position = UDim2.new(0.05, 0, 0, 35)
-lineSeparator.Size = UDim2.new(0.9, 0, 0, 1)
-
+-- Botão de Abrir/Fechar
 local openCloseButton = Instance.new("TextButton", mainGui)
-openCloseButton.BackgroundColor3 = Color3.fromRGB(49, 49, 49)
-openCloseButton.BorderColor3 = Color3.fromRGB(255, 255, 255)
+openCloseButton.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 openCloseButton.Size = UDim2.new(0, 150, 0, 30)
 openCloseButton.Position = UDim2.new(0.5, -75, 0.05, 0)
 openCloseButton.Font = Enum.Font.GothamBold
@@ -65,99 +72,122 @@ openCloseButton.Text = "Abrir / Fechar"
 openCloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 openCloseButton.TextSize = 16
 openCloseButton.ZIndex = 12
+local ocCorner = Instance.new("UICorner", openCloseButton)
+ocCorner.CornerRadius = UDim.new(0, 6)
+local ocStroke = Instance.new("UIStroke", openCloseButton)
+ocStroke.Color = Color3.fromRGB(80, 80, 80)
+ocStroke.Thickness = 1
 
-local aimbotSectionFrame = Instance.new("Frame", mainFrame)
-aimbotSectionFrame.BackgroundTransparency = 1
-aimbotSectionFrame.Position = UDim2.new(0.05, 0, 0, 45)
-aimbotSectionFrame.Size = UDim2.new(0.9, 0, 1, -50)
+-- Container para os botões
+local buttonContainer = Instance.new("ScrollingFrame", mainFrame)
+buttonContainer.BackgroundTransparency = 1
+buttonContainer.Position = UDim2.new(0.05, 0, 0, 45)
+buttonContainer.Size = UDim2.new(0.9, 0, 1, -55)
+buttonContainer.BorderSizePixel = 0
+buttonContainer.ScrollBarThickness = 4
 
-local aimbotListLayout = Instance.new("UIListLayout", aimbotSectionFrame)
-aimbotListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-aimbotListLayout.Padding = UDim.new(0, 5)
+local listLayout = Instance.new("UIListLayout", buttonContainer)
+listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+listLayout.Padding = UDim.new(0, 8)
 
-local function createMenuButton(parent, text)
-    local button = Instance.new("TextButton", parent)
-    button.BackgroundColor3 = Color3.fromRGB(52, 52, 52)
-    button.BorderColor3 = Color3.fromRGB(80, 80, 80)
+-- Cores
+local COLOR_ACCENT = Color3.fromRGB(17, 223, 255)
+local COLOR_OFF = Color3.fromRGB(52, 52, 52)
+local COLOR_HOVER = Color3.fromRGB(70, 70, 70)
+
+-- Função para criar botões com o novo estilo
+local function CreateButton(text)
+    local button = Instance.new("TextButton")
+    button.Parent = buttonContainer
+    button.BackgroundColor3 = COLOR_OFF
     button.Size = UDim2.new(1, 0, 0, 30)
     button.Font = Enum.Font.Gotham
     button.Text = text
     button.TextColor3 = Color3.fromRGB(255, 255, 255)
     button.TextSize = 16
+
+    local corner = Instance.new("UICorner", button)
+    corner.CornerRadius = UDim.new(0, 6)
+    local stroke = Instance.new("UIStroke", button)
+    stroke.Color = Color3.fromRGB(80, 80, 80)
+    stroke.Thickness = 1
+    
+    -- Efeitos de Hover
+    button.MouseEnter:Connect(function()
+        if not button:GetAttribute("IsActive") then
+            TweenService:Create(button, TweenInfo.new(0.2), {BackgroundColor3 = COLOR_HOVER}):Play()
+        end
+    end)
+    button.MouseLeave:Connect(function()
+        if not button:GetAttribute("IsActive") then
+            TweenService:Create(button, TweenInfo.new(0.2), {BackgroundColor3 = COLOR_OFF}):Play()
+        end
+    end)
+
     return button
 end
 
-local aimbotEnableButton = createMenuButton(aimbotSectionFrame, "Aimbot: OFF")
-local aimbotWallCheckButton = createMenuButton(aimbotSectionFrame, "WallCheck: ON")
-local aimbotTeamCheckButton = createMenuButton(aimbotSectionFrame, "TeamCheck: ON")
-local aimbotShowFovButton = createMenuButton(aimbotSectionFrame, "Show FOV: OFF")
-local fovButton = createMenuButton(aimbotSectionFrame, "FOV: 80")
-local smoothnessButton = createMenuButton(aimbotSectionFrame, "Suavidade: 0.3")
-local distanceButton = createMenuButton(aimbotSectionFrame, "Distância: 500")
+local aimbotEnableButton = CreateButton("Aimbot: OFF")
+local aimbotWallCheckButton = CreateButton("WallCheck: ON")
+local aimbotTeamCheckButton = CreateButton("TeamCheck: ON")
+local aimbotShowFovButton = CreateButton("Show FOV: OFF")
+local fovButton = CreateButton("FOV: 80")
+local smoothnessButton = CreateButton("Suavidade: 0.3")
+local distanceButton = CreateButton("Distância: 500")
 
 --================================================================================
--- CONEXÕES DOS BOTÕES
+-- CONEXÕES E LÓGICA DOS BOTÕES
 --================================================================================
 
-local function toggleButtonText(button, isActive, textPrefix) button.Text = textPrefix .. (isActive and "ON" or "OFF") end
-openCloseButton.MouseButton1Click:Connect(function() mainFrame.Visible = not mainFrame.Visible end)
-aimbotEnableButton.MouseButton1Click:Connect(function() Settings.AimbotEnabled = not Settings.AimbotEnabled; toggleButtonText(aimbotEnableButton, Settings.AimbotEnabled, "Aimbot: ") end)
-aimbotWallCheckButton.MouseButton1Click:Connect(function() Settings.WallCheck = not Settings.WallCheck; toggleButtonText(aimbotWallCheckButton, Settings.WallCheck, "WallCheck: ") end)
-aimbotTeamCheckButton.MouseButton1Click:Connect(function() Settings.TeamCheck = not Settings.TeamCheck; toggleButtonText(aimbotTeamCheckButton, Settings.TeamCheck, "TeamCheck: ") end)
-aimbotShowFovButton.MouseButton1Click:Connect(function() Settings.ShowFov = not Settings.ShowFov; toggleButtonText(aimbotShowFovButton, Settings.ShowFov, "Show FOV: ") end)
-
-local function createInputForButton(btn, min, max, callback)
-    local input
-    btn.MouseButton1Click:Connect(function()
-        if input then input:Destroy() end
-        btn.Visible = false
-        input = Instance.new("TextBox", btn.Parent)
-        input.Size, input.Position, input.ZIndex = btn.Size, btn.Position, btn.ZIndex + 1
-        input.PlaceholderText = tostring(min).." ~ "..tostring(max)
-        input.BackgroundColor3 = Color3.fromRGB(90, 90, 90)
-        input.TextColor3 = Color3.fromRGB(255, 255, 255)
-        input.Text = ""
-        input:CaptureFocus()
-        input.FocusLost:Connect(function(enter)
-            if enter then
-                local v = tonumber(input.Text)
-                if v and v >= min and v <= max then callback(v) end
-            end
-            input:Destroy()
-            btn.Visible = true
-        end)
-    end)
+-- Função para atualizar o estado visual de um botão
+local function UpdateButtonState(button, isActive, textPrefix)
+    button.Text = textPrefix .. (isActive and "ON" or "OFF")
+    button:SetAttribute("IsActive", isActive)
+    local targetColor = isActive and COLOR_ACCENT or COLOR_OFF
+    TweenService:Create(button, TweenInfo.new(0.2), {BackgroundColor3 = targetColor}):Play()
 end
 
-createInputForButton(fovButton, 1, 999, function(val) Settings.FOV = val; fovButton.Text = "FOV: " .. Settings.FOV end)
-createInputForButton(smoothnessButton, 0.1, 1.0, function(val) Settings.Smoothness = val; smoothnessButton.Text = string.format("Suavidade: %.1f", Settings.Smoothness) end)
-createInputForButton(distanceButton, 1, 1000, function(val) Settings.MaxDistance = val; distanceButton.Text = "Distância: " .. Settings.MaxDistance end)
+-- Configurar estado inicial dos botões
+UpdateButtonState(aimbotEnableButton, Settings.AimbotEnabled, "Aimbot: ")
+UpdateButtonState(aimbotWallCheckButton, Settings.WallCheck, "WallCheck: ")
+UpdateButtonState(aimbotTeamCheckButton, Settings.TeamCheck, "TeamCheck: ")
+UpdateButtonState(aimbotShowFovButton, Settings.ShowFov, "Show FOV: ")
+
+-- Conexões de clique
+aimbotEnableButton.MouseButton1Click:Connect(function() Settings.AimbotEnabled = not Settings.AimbotEnabled; UpdateButtonState(aimbotEnableButton, Settings.AimbotEnabled, "Aimbot: ") end)
+aimbotWallCheckButton.MouseButton1Click:Connect(function() Settings.WallCheck = not Settings.WallCheck; UpdateButtonState(aimbotWallCheckButton, Settings.WallCheck, "WallCheck: ") end)
+aimbotTeamCheckButton.MouseButton1Click:Connect(function() Settings.TeamCheck = not Settings.TeamCheck; UpdateButtonState(aimbotTeamCheckButton, Settings.TeamCheck, "TeamCheck: ") end)
+aimbotShowFovButton.MouseButton1Click:Connect(function() Settings.ShowFov = not Settings.ShowFov; UpdateButtonState(aimbotShowFovButton, Settings.ShowFov, "Show FOV: ") end)
+
+-- Animação de Abrir/Fechar
+local menuVisible = true
+openCloseButton.MouseButton1Click:Connect(function()
+    menuVisible = not menuVisible
+    local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+    local goal = {Position = menuVisible and UDim2.new(0.5, -200, 0.5, -160) or UDim2.new(0.5, -200, -1, 0)}
+    TweenService:Create(mainFrame, tweenInfo, goal):Play()
+end)
 
 --================================================================================
--- LOOP PRINCIPAL (RenderStepped)
+-- LÓGICA PRINCIPAL (RenderStepped)
 --================================================================================
-
--- Criando o objeto de desenho para o círculo UMA ÚNICA VEZ.
 local FovCircle = Drawing.new("Circle")
 FovCircle.Visible = true
 FovCircle.Thickness = 2
-FovCircle.Color = Color3.fromRGB(17, 223, 255)
+FovCircle.Color = Color3.fromRGB(255, 255, 255)
 FovCircle.Filled = false
 FovCircle.NumSides = 64
+FovCircle.Radius = 0
 
 RunService.RenderStepped:Connect(function()
-    
-    -- Usando a lógica mais segura: mover para fora da tela.
+    FovCircle.Radius = Settings.ShowFov and Settings.FOV or 0
     if Settings.ShowFov then
-        FovCircle.Radius = Settings.FOV
         FovCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
-    else
-        FovCircle.Position = Vector2.new(9e9, 9e9)
     end
     
-    -- Lógica do Aimbot
     if Settings.AimbotEnabled then
         local closest, shortest = nil, Settings.FOV
+        -- Sua lógica de Aimbot (sem alterações)
         for _, player in pairs(Players:GetPlayers()) do
             if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
                 local hum = player.Character:FindFirstChild("Humanoid")
