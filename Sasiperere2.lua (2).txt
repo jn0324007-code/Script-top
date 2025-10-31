@@ -1,0 +1,186 @@
+--[[
+    Script: Sasiperere.lua (Correção de Conflito com CoreGui)
+    [!] CORREÇÃO: O problema é um conflito no script que impede o Drawing de funcionar.
+    A causa mais provável é a GUI estar na PlayerGui. Este script move a GUI
+    para a CoreGui, como no outro script que funciona, para resolver o conflito.
+]]
+
+--================================================================================
+-- SERVIÇOS E VARIÁVEIS
+--================================================================================
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Camera = workspace.CurrentCamera
+local LocalPlayer = Players.LocalPlayer
+
+local Settings = {
+    AimbotEnabled = false, TeamCheck = true, WallCheck = true,
+    ShowFov = false, FOV = 80, Smoothness = 0.3, MaxDistance = 500
+}
+
+--================================================================================
+-- CRIAÇÃO DA INTERFACE GRÁFICA (GUI)
+--================================================================================
+local mainGui = Instance.new("ScreenGui")
+mainGui.Name = "DeleteMob_GUI_Final"
+-- [!] MUDANÇA CRÍTICA AQUI: Usando CoreGui em vez de PlayerGui
+mainGui.Parent = game:GetService("CoreGui") 
+mainGui.ResetOnSpawn = false
+
+-- Interface Principal
+local mainFrame = Instance.new("Frame", mainGui)
+mainFrame.Name = "DeleteMobF"
+mainFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+mainFrame.BorderColor3 = Color3.fromRGB(80, 80, 80)
+mainFrame.Position = UDim2.new(0.5, -200, 0.5, -160)
+mainFrame.Size = UDim2.new(0, 400, 0, 320)
+mainFrame.Draggable = true
+mainFrame.Active = true
+mainFrame.Visible = true
+
+-- Resto da sua GUI (sem alterações)
+local titleLabel = Instance.new("TextLabel", mainFrame)
+titleLabel.BackgroundTransparency = 1
+titleLabel.Position = UDim2.new(0.05, 0, 0, 5)
+titleLabel.Size = UDim2.new(0, 300, 0, 25)
+titleLabel.Font = Enum.Font.GothamBold
+titleLabel.Text = "DeleteMob | Cheat Engine"
+titleLabel.TextColor3 = Color3.fromRGB(17, 223, 255)
+titleLabel.TextSize = 20
+titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+local lineSeparator = Instance.new("Frame", mainFrame)
+lineSeparator.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+lineSeparator.Position = UDim2.new(0.05, 0, 0, 35)
+lineSeparator.Size = UDim2.new(0.9, 0, 0, 1)
+
+local openCloseButton = Instance.new("TextButton", mainGui)
+openCloseButton.BackgroundColor3 = Color3.fromRGB(49, 49, 49)
+openCloseButton.BorderColor3 = Color3.fromRGB(255, 255, 255)
+openCloseButton.Size = UDim2.new(0, 150, 0, 30)
+openCloseButton.Position = UDim2.new(0.5, -75, 0.05, 0)
+openCloseButton.Font = Enum.Font.GothamBold
+openCloseButton.Text = "Abrir / Fechar"
+openCloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+openCloseButton.TextSize = 16
+openCloseButton.ZIndex = 12
+
+local aimbotSectionFrame = Instance.new("Frame", mainFrame)
+aimbotSectionFrame.BackgroundTransparency = 1
+aimbotSectionFrame.Position = UDim2.new(0.05, 0, 0, 45)
+aimbotSectionFrame.Size = UDim2.new(0.9, 0, 1, -50)
+
+local aimbotListLayout = Instance.new("UIListLayout", aimbotSectionFrame)
+aimbotListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+aimbotListLayout.Padding = UDim.new(0, 5)
+
+local function createMenuButton(parent, text)
+    local button = Instance.new("TextButton", parent)
+    button.BackgroundColor3 = Color3.fromRGB(52, 52, 52)
+    button.BorderColor3 = Color3.fromRGB(80, 80, 80)
+    button.Size = UDim2.new(1, 0, 0, 30)
+    button.Font = Enum.Font.Gotham
+    button.Text = text
+    button.TextColor3 = Color3.fromRGB(255, 255, 255)
+    button.TextSize = 16
+    return button
+end
+
+local aimbotEnableButton = createMenuButton(aimbotSectionFrame, "Aimbot: OFF")
+local aimbotWallCheckButton = createMenuButton(aimbotSectionFrame, "WallCheck: ON")
+local aimbotTeamCheckButton = createMenuButton(aimbotSectionFrame, "TeamCheck: ON")
+local aimbotShowFovButton = createMenuButton(aimbotSectionFrame, "Show FOV: OFF")
+local fovButton = createMenuButton(aimbotSectionFrame, "FOV: 80")
+local smoothnessButton = createMenuButton(aimbotSectionFrame, "Suavidade: 0.3")
+local distanceButton = createMenuButton(aimbotSectionFrame, "Distância: 500")
+
+--================================================================================
+-- CONEXÕES DOS BOTÕES
+--================================================================================
+
+local function toggleButtonText(button, isActive, textPrefix) button.Text = textPrefix .. (isActive and "ON" or "OFF") end
+openCloseButton.MouseButton1Click:Connect(function() mainFrame.Visible = not mainFrame.Visible end)
+aimbotEnableButton.MouseButton1Click:Connect(function() Settings.AimbotEnabled = not Settings.AimbotEnabled; toggleButtonText(aimbotEnableButton, Settings.AimbotEnabled, "Aimbot: ") end)
+aimbotWallCheckButton.MouseButton1Click:Connect(function() Settings.WallCheck = not Settings.WallCheck; toggleButtonText(aimbotWallCheckButton, Settings.WallCheck, "WallCheck: ") end)
+aimbotTeamCheckButton.MouseButton1Click:Connect(function() Settings.TeamCheck = not Settings.TeamCheck; toggleButtonText(aimbotTeamCheckButton, Settings.TeamCheck, "TeamCheck: ") end)
+aimbotShowFovButton.MouseButton1Click:Connect(function() Settings.ShowFov = not Settings.ShowFov; toggleButtonText(aimbotShowFovButton, Settings.ShowFov, "Show FOV: ") end)
+
+local function createInputForButton(btn, min, max, callback)
+    local input
+    btn.MouseButton1Click:Connect(function()
+        if input then input:Destroy() end
+        btn.Visible = false
+        input = Instance.new("TextBox", btn.Parent)
+        input.Size, input.Position, input.ZIndex = btn.Size, btn.Position, btn.ZIndex + 1
+        input.PlaceholderText = tostring(min).." ~ "..tostring(max)
+        input.BackgroundColor3 = Color3.fromRGB(90, 90, 90)
+        input.TextColor3 = Color3.fromRGB(255, 255, 255)
+        input.Text = ""
+        input:CaptureFocus()
+        input.FocusLost:Connect(function(enter)
+            if enter then
+                local v = tonumber(input.Text)
+                if v and v >= min and v <= max then callback(v) end
+            end
+            input:Destroy()
+            btn.Visible = true
+        end)
+    end)
+end
+
+createInputForButton(fovButton, 1, 999, function(val) Settings.FOV = val; fovButton.Text = "FOV: " .. Settings.FOV end)
+createInputForButton(smoothnessButton, 0.1, 1.0, function(val) Settings.Smoothness = val; smoothnessButton.Text = string.format("Suavidade: %.1f", Settings.Smoothness) end)
+createInputForButton(distanceButton, 1, 1000, function(val) Settings.MaxDistance = val; distanceButton.Text = "Distância: " .. Settings.MaxDistance end)
+
+--================================================================================
+-- LOOP PRINCIPAL (RenderStepped)
+--================================================================================
+
+-- Criando o objeto de desenho para o círculo UMA ÚNICA VEZ.
+local FovCircle = Drawing.new("Circle")
+FovCircle.Visible = true
+FovCircle.Thickness = 2
+FovCircle.Color = Color3.fromRGB(17, 223, 255)
+FovCircle.Filled = false
+FovCircle.NumSides = 64
+
+RunService.RenderStepped:Connect(function()
+    
+    -- Usando a lógica mais segura: mover para fora da tela.
+    if Settings.ShowFov then
+        FovCircle.Radius = Settings.FOV
+        FovCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+    else
+        FovCircle.Position = Vector2.new(9e9, 9e9)
+    end
+    
+    -- Lógica do Aimbot
+    if Settings.AimbotEnabled then
+        local closest, shortest = nil, Settings.FOV
+        for _, player in pairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                local hum = player.Character:FindFirstChild("Humanoid")
+                if hum and hum.Health > 0 then
+                    if Settings.TeamCheck and player.Team == LocalPlayer.Team then continue end
+                    local pos, onScreen = Camera:WorldToViewportPoint(player.Character.HumanoidRootPart.Position)
+                    local dist2D = (Vector2.new(pos.X, pos.Y) - Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)).Magnitude
+                    local dist3D = (Camera.CFrame.Position - player.Character.HumanoidRootPart.Position).Magnitude
+                    if onScreen and dist2D < shortest and dist3D <= Settings.MaxDistance then
+                        if Settings.WallCheck then
+                            local ray = Ray.new(Camera.CFrame.Position, (player.Character.HumanoidRootPart.Position - Camera.CFrame.Position).Unit * 500)
+                            local hit = workspace:FindPartOnRay(ray, LocalPlayer.Character, false, true)
+                            if hit and not hit:IsDescendantOf(player.Character) then continue end
+                        end
+                        shortest = dist2D
+                        closest = player
+                    end
+                end
+            end
+        end
+        if closest then
+            local pos = closest.Character.HumanoidRootPart.Position
+            Camera.CFrame = Camera.CFrame:Lerp(CFrame.new(Camera.CFrame.Position, pos), Settings.Smoothness)
+        end
+    end
+end)
