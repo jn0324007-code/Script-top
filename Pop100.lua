@@ -1,5 +1,8 @@
 --[[
-    Script: Sasiperere.lua (VERSÃO DE DIAGNÓSTICO)
+    Script: Sasiperere.lua (Versão Final com Correção do Hook)
+    [!] CORREÇÃO FINAL: A estrutura de argumentos da função CreateBullet do jogo mudou.
+    Este script foi atualizado para usar os novos índices corretos para o tipo de munição (Args[7])
+    e para a modificação do CFrame da bala (substituindo Args[5]).
 ]]
 
 --================================================================================
@@ -23,7 +26,6 @@ local Settings = {
 --================================================================================
 -- CRIAÇÃO DA INTERFACE GRÁFICA (GUI)
 --================================================================================
--- (A GUI continua a mesma, não precisa ser alterada)
 local mainGui = Instance.new("ScreenGui", CoreGui); mainGui.Name = "DeleteMob_GUI_Final"; mainGui.ResetOnSpawn = false
 local mainFrame = Instance.new("Frame", mainGui); mainFrame.Name = "DeleteMobF"; mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25); mainFrame.Position = UDim2.new(0.5, -200, 0.5, -200); mainFrame.Size = UDim2.new(0, 400, 0, 400); mainFrame.Draggable = true; mainFrame.Active = true; mainFrame.Visible = true; mainFrame.ClipsDescendants = true
 local frameCorner = Instance.new("UICorner", mainFrame); frameCorner.CornerRadius = UDim.new(0, 8); local frameStroke = Instance.new("UIStroke", mainFrame); frameStroke.Color = Color3.fromRGB(80, 80, 80); frameStroke.Thickness = 1
@@ -51,16 +53,8 @@ function SilentAimFunctions:BulletDrop(From, To, MuzzleVelocity, Drag, Drop) loc
 -- SISTEMA DE HOOK (CRIAR E DESTRUIR)
 --================================================================================
 local BulletModule = nil; local IsHooked = false
-print("[DIAGNÓSTICO] Procurando o módulo de bala...")
-pcall(function() 
-    BulletModule = require(ReplicatedStorage.Modules.FPS.Bullet) 
-end)
-
-if BulletModule then
-    print("[DIAGNÓSTICO] SUCESSO! Módulo de bala encontrado.")
-else
-    warn("[DIAGNÓSTICO] FALHA! Módulo de Bala em ReplicatedStorage.Modules.FPS.Bullet não foi encontrado. O Silent Aim NÃO VAI FUNCIONAR.")
-end
+pcall(function() BulletModule = require(ReplicatedStorage.Modules.FPS.Bullet) end)
+if not BulletModule then warn("Módulo de Bala do Project Delta não encontrado.") end
 
 local function ActivateHook()
     if IsHooked or not BulletModule or not hookfunction or not newcclosure then return end
@@ -68,27 +62,34 @@ local function ActivateHook()
     local OldBullet; OldBullet = hookfunction(BulletModule.CreateBullet, newcclosure(function(...)
         local Args = {...}
         if Settings.SilentAimEnabled and not checkcaller() then
-            -- print("[DIAGNÓSTICO] Função CreateBullet foi chamada (hooked)!") -- Descomente para spammar o console a cada tiro
             local Target = SilentAimFunctions:GetClosestToCenter()
             if Target then
-                print("[DIAGNÓSTICO] Alvo encontrado:", Target.Name, "Dono:", Target.Parent.Name)
-                local RecoilTable = Args[9]
-                local AmmoType = ReplicatedStorage.AmmoTypes:FindFirstChild(tostring(Args[6]))
+                -- [INÍCIO DA CORREÇÃO] --
+                -- Com a atualização do jogo, os argumentos mudaram.
+                local originalAimPart = Args[5] -- O 5º argumento é a peça de onde o tiro sai.
+                local ammoTypeName = tostring(Args[7]) -- O 7º argumento é o nome da munição.
+                local AmmoType = ReplicatedStorage.AmmoTypes:FindFirstChild(ammoTypeName)
 
-                if AmmoType and typeof(RecoilTable) == "table" then
-                    print("[DIAGNÓSTICO] Tipo de munição e tabela de recoil são válidos. Tentando calcular...")
-                    -- REMOVI O PCALL PARA VER O ERRO EXATO
-                    local Prediction = SilentAimFunctions:Prediction(Target, AmmoType:GetAttribute("MuzzleVelocity"), AmmoType:GetAttribute("Drag"))
-                    local PredictedDrop = SilentAimFunctions:BulletDrop(Camera.CFrame.Position, Prediction, AmmoType:GetAttribute("MuzzleVelocity"), AmmoType:GetAttribute("Drag"), AmmoType:GetAttribute("ProjectileDrop"))
-                    RecoilTable.CFrame = CFrame.new(RecoilTable.CFrame.Position, Prediction + Vector3.new(0, PredictedDrop, 0))
-                    print("[DIAGNÓSTICO] CÁLCULO BEM SUCEDIDO! CFrame da bala foi modificado.")
-                else
-                    warn("[DIAGNÓSTICO] FALHA no cálculo: AmmoType ou RecoilTable inválidos.")
-                    print("[DIAGNÓSTICO] AmmoType encontrado:", AmmoType)
-                    print("[DIAGNÓSTICO] Tipo de RecoilTable:", typeof(RecoilTable))
+                -- Verificamos se a peça original e o tipo de munição são válidos
+                if AmmoType and typeof(originalAimPart) == "Instance" then
+                    pcall(function()
+                        -- Os seus cálculos de predição e queda da bala
+                        local Prediction = SilentAimFunctions:Prediction(Target, AmmoType:GetAttribute("MuzzleVelocity"), AmmoType:GetAttribute("Drag"))
+                        local PredictedDrop = SilentAimFunctions:BulletDrop(Camera.CFrame.Position, Prediction, AmmoType:GetAttribute("MuzzleVelocity"), AmmoType:GetAttribute("Drag"), AmmoType:GetAttribute("ProjectileDrop"))
+                        
+                        -- Criamos a nova direção do tiro
+                        local finalTargetPosition = Prediction + Vector3.new(0, PredictedDrop, 0)
+                        
+                        -- Criamos uma nova tabela para substituir o argumento da mira
+                        local newAimArgument = {
+                            CFrame = CFrame.new(originalAimPart.CFrame.Position, finalTargetPosition)
+                        }
+                        
+                        -- Modificamos a tabela de argumentos original, trocando a peça pelo nosso CFrame
+                        Args[5] = newAimArgument
+                    end)
                 end
-            else
-                -- print("[DIAGNÓSTICO] Nenhum alvo válido encontrado no FOV.") -- Descomente para spammar o console
+                -- [FIM DA CORREÇÃO] --
             end
         end
         return OldBullet(unpack(Args))
@@ -106,7 +107,6 @@ end
 --================================================================================
 -- CONEXÕES DOS BOTÕES
 --================================================================================
--- (A lógica dos botões continua a mesma)
 local function UpdateButtonState(button, isActive, textPrefix) button.Text = textPrefix .. (isActive and "ON" or "OFF"); button:SetAttribute("IsActive", isActive); local targetColor = isActive and COLOR_ACCENT or COLOR_OFF; TweenService:Create(button, TweenInfo.new(0.2), {BackgroundColor3 = targetColor}):Play() end
 UpdateButtonState(aimbotEnableButton, Settings.AimbotEnabled, "Aimbot: "); UpdateButtonState(silentAimEnableButton, Settings.SilentAimEnabled, "Silent Aim: "); UpdateButtonState(predictionButton, Settings.Prediction, "Prediction: "); UpdateButtonState(aimbotWallCheckButton, Settings.WallCheck, "WallCheck: "); UpdateButtonState(aimbotTeamCheckButton, Settings.TeamCheck, "TeamCheck: "); UpdateButtonState(aimbotShowFovButton, Settings.ShowFov, "Show FOV: ")
 aimbotEnableButton.MouseButton1Click:Connect(function() Settings.AimbotEnabled = not Settings.AimbotEnabled; if Settings.AimbotEnabled then Settings.SilentAimEnabled = false; DeactivateHook() end; UpdateButtonState(aimbotEnableButton, Settings.AimbotEnabled, "Aimbot: "); UpdateButtonState(silentAimEnableButton, Settings.SilentAimEnabled, "Silent Aim: ") end)
@@ -123,7 +123,6 @@ local menuVisible = true; openCloseButton.MouseButton1Click:Connect(function() m
 --================================================================================
 -- LÓGICA DE RENDERIZAÇÃO
 --================================================================================
--- (A lógica de renderização continua a mesma)
 local FovCircle = Drawing.new("Circle"); FovCircle.Visible = true; FovCircle.Thickness = 2; FovCircle.Color = Color3.fromRGB(255, 255, 255); FovCircle.Filled = false; FovCircle.NumSides = 64; FovCircle.Radius = 0
 local currentTarget = nil
 RunService.RenderStepped:Connect(function()
@@ -136,7 +135,7 @@ RunService.RenderStepped:Connect(function()
         for _, player in pairs(Players:GetPlayers()) do
             if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") and player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.Health > 0 then
                 if Settings.TeamCheck and player.Team == LocalPlayer.Team then continue end
-                local pos, onScreen = Camera:WorldToViewportPoint(player.Character.HumanoidRootPart.Position); if onScreen then local dist2D = (Vector2.new(pos.X, pos.Y) - CenterScreen).Magnitude; local dist3D = (Camera.CFrame.Position - player.Character.HumanoidRootPpart.Position).Magnitude; if dist2D < shortest and dist3D <= Settings.MaxDistance then if Settings.WallCheck and not SilentAimFunctions:IsVisible(player.Character.HumanoidRootPart) then continue end; shortest = dist2D; closest = player end end
+                local pos, onScreen = Camera:WorldToViewportPoint(player.Character.HumanoidRootPart.Position); if onScreen then local dist2D = (Vector2.new(pos.X, pos.Y) - CenterScreen).Magnitude; local dist3D = (Camera.CFrame.Position - player.Character.HumanoidRootPart.Position).Magnitude; if dist2D < shortest and dist3D <= Settings.MaxDistance then if Settings.WallCheck and not SilentAimFunctions:IsVisible(player.Character.HumanoidRootPart) then continue end; shortest = dist2D; closest = player end end
             end
         end
         if closest then local pos = closest.Character.HumanoidRootPart.Position; Camera.CFrame = Camera.CFrame:Lerp(CFrame.new(Camera.CFrame.Position, pos), Settings.Smoothness) end
