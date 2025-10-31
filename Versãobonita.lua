@@ -1,8 +1,7 @@
 --[[
-    Script: Sasiperere.lua (Versão Beautified)
-    [!] DESIGN: A interface foi completamente redesenhada com um tema moderno,
-    cantos arredondados, animações suaves e melhor feedback visual para os botões.
-    A lógica funcional (Aimbot, FOV) permanece a mesma, otimizada e estável.
+    Script: Sasiperere.lua (Versão Beautified CORRIGIDA)
+    [!] CORREÇÃO: A lógica para editar os valores de FOV, Suavidade e Distância
+    foi restaurada. Agora é possível clicar nos botões para alterar os valores.
 ]]
 
 --================================================================================
@@ -31,7 +30,6 @@ mainGui.ResetOnSpawn = false
 local mainFrame = Instance.new("Frame", mainGui)
 mainFrame.Name = "DeleteMobF"
 mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-mainFrame.BorderColor3 = Color3.fromRGB(80, 80, 80)
 mainFrame.Position = UDim2.new(0.5, -200, 0.5, -160)
 mainFrame.Size = UDim2.new(0, 400, 0, 320)
 mainFrame.Draggable = true
@@ -112,17 +110,8 @@ local function CreateButton(text)
     stroke.Color = Color3.fromRGB(80, 80, 80)
     stroke.Thickness = 1
     
-    -- Efeitos de Hover
-    button.MouseEnter:Connect(function()
-        if not button:GetAttribute("IsActive") then
-            TweenService:Create(button, TweenInfo.new(0.2), {BackgroundColor3 = COLOR_HOVER}):Play()
-        end
-    end)
-    button.MouseLeave:Connect(function()
-        if not button:GetAttribute("IsActive") then
-            TweenService:Create(button, TweenInfo.new(0.2), {BackgroundColor3 = COLOR_OFF}):Play()
-        end
-    end)
+    button.MouseEnter:Connect(function() if not button:GetAttribute("IsActive") then TweenService:Create(button, TweenInfo.new(0.2), {BackgroundColor3 = COLOR_HOVER}):Play() end end)
+    button.MouseLeave:Connect(function() if not button:GetAttribute("IsActive") then TweenService:Create(button, TweenInfo.new(0.2), {BackgroundColor3 = COLOR_OFF}):Play() end end)
 
     return button
 end
@@ -139,7 +128,6 @@ local distanceButton = CreateButton("Distância: 500")
 -- CONEXÕES E LÓGICA DOS BOTÕES
 --================================================================================
 
--- Função para atualizar o estado visual de um botão
 local function UpdateButtonState(button, isActive, textPrefix)
     button.Text = textPrefix .. (isActive and "ON" or "OFF")
     button:SetAttribute("IsActive", isActive)
@@ -147,17 +135,50 @@ local function UpdateButtonState(button, isActive, textPrefix)
     TweenService:Create(button, TweenInfo.new(0.2), {BackgroundColor3 = targetColor}):Play()
 end
 
--- Configurar estado inicial dos botões
+-- Configurar estado inicial
 UpdateButtonState(aimbotEnableButton, Settings.AimbotEnabled, "Aimbot: ")
 UpdateButtonState(aimbotWallCheckButton, Settings.WallCheck, "WallCheck: ")
 UpdateButtonState(aimbotTeamCheckButton, Settings.TeamCheck, "TeamCheck: ")
 UpdateButtonState(aimbotShowFovButton, Settings.ShowFov, "Show FOV: ")
 
--- Conexões de clique
+-- Conexões de clique para botões de toggle
 aimbotEnableButton.MouseButton1Click:Connect(function() Settings.AimbotEnabled = not Settings.AimbotEnabled; UpdateButtonState(aimbotEnableButton, Settings.AimbotEnabled, "Aimbot: ") end)
 aimbotWallCheckButton.MouseButton1Click:Connect(function() Settings.WallCheck = not Settings.WallCheck; UpdateButtonState(aimbotWallCheckButton, Settings.WallCheck, "WallCheck: ") end)
 aimbotTeamCheckButton.MouseButton1Click:Connect(function() Settings.TeamCheck = not Settings.TeamCheck; UpdateButtonState(aimbotTeamCheckButton, Settings.TeamCheck, "TeamCheck: ") end)
 aimbotShowFovButton.MouseButton1Click:Connect(function() Settings.ShowFov = not Settings.ShowFov; UpdateButtonState(aimbotShowFovButton, Settings.ShowFov, "Show FOV: ") end)
+
+-- [!] LÓGICA DE INPUT RESTAURADA E ESTILIZADA
+local function createInputForButton(button, settingName, min, max, format)
+    button.MouseButton1Click:Connect(function()
+        button.Visible = false
+        local input = Instance.new("TextBox")
+        input.Parent = button.Parent
+        input.Size, input.Position, input.ZIndex = button.Size, button.Position, button.ZIndex + 1
+        input.Font, input.TextSize, input.TextColor3 = button.Font, button.TextSize, button.TextColor3
+        input.BackgroundColor3 = COLOR_HOVER
+        input.ClearTextOnFocus, input.PlaceholderText = true, tostring(min).."-"..tostring(max)
+        
+        local c = Instance.new("UICorner", input); c.CornerRadius = UDim.new(0, 6)
+        local s = Instance.new("UIStroke", input); s.Color = Color3.fromRGB(80, 80, 80); s.Thickness = 1
+        input:CaptureFocus()
+        
+        input.FocusLost:Connect(function(enter)
+            if enter then
+                local v = tonumber(input.Text)
+                if v and v >= min and v <= max then
+                    Settings[settingName] = v
+                    button.Text = string.format(format, v)
+                end
+            end
+            input:Destroy()
+            button.Visible = true
+        end)
+    end)
+end
+
+createInputForButton(fovButton, "FOV", 1, 999, "FOV: %d")
+createInputForButton(smoothnessButton, "Smoothness", 0.1, 1.0, "Suavidade: %.1f")
+createInputForButton(distanceButton, "MaxDistance", 1, 1000, "Distância: %d")
 
 -- Animação de Abrir/Fechar
 local menuVisible = true
@@ -181,13 +202,9 @@ FovCircle.Radius = 0
 
 RunService.RenderStepped:Connect(function()
     FovCircle.Radius = Settings.ShowFov and Settings.FOV or 0
-    if Settings.ShowFov then
-        FovCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
-    end
-    
+    if Settings.ShowFov then FovCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2) end
     if Settings.AimbotEnabled then
         local closest, shortest = nil, Settings.FOV
-        -- Sua lógica de Aimbot (sem alterações)
         for _, player in pairs(Players:GetPlayers()) do
             if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
                 local hum = player.Character:FindFirstChild("Humanoid")
@@ -202,8 +219,7 @@ RunService.RenderStepped:Connect(function()
                             local hit = workspace:FindPartOnRay(ray, LocalPlayer.Character, false, true)
                             if hit and not hit:IsDescendantOf(player.Character) then continue end
                         end
-                        shortest = dist2D
-                        closest = player
+                        shortest = dist2D; closest = player
                     end
                 end
             end
