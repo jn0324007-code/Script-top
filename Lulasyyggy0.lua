@@ -1,9 +1,5 @@
 --[[
-    Script: Sasiperere.lua (Versão com Correção do Motor do Silent Aim)
-    [!] CORREÇÃO FINAL: O alvo era encontrado, mas os cálculos de desvio falhavam
-    silenciosamente. A lógica interna do hook foi reforçada com verificações
-    extras para garantir que as informações da bala sejam lidas corretamente
-    antes de tentar desviar o tiro.
+    Script: Sasiperere.lua (VERSÃO DE DIAGNÓSTICO)
 ]]
 
 --================================================================================
@@ -27,6 +23,7 @@ local Settings = {
 --================================================================================
 -- CRIAÇÃO DA INTERFACE GRÁFICA (GUI)
 --================================================================================
+-- (A GUI continua a mesma, não precisa ser alterada)
 local mainGui = Instance.new("ScreenGui", CoreGui); mainGui.Name = "DeleteMob_GUI_Final"; mainGui.ResetOnSpawn = false
 local mainFrame = Instance.new("Frame", mainGui); mainFrame.Name = "DeleteMobF"; mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25); mainFrame.Position = UDim2.new(0.5, -200, 0.5, -200); mainFrame.Size = UDim2.new(0, 400, 0, 400); mainFrame.Draggable = true; mainFrame.Active = true; mainFrame.Visible = true; mainFrame.ClipsDescendants = true
 local frameCorner = Instance.new("UICorner", mainFrame); frameCorner.CornerRadius = UDim.new(0, 8); local frameStroke = Instance.new("UIStroke", mainFrame); frameStroke.Color = Color3.fromRGB(80, 80, 80); frameStroke.Thickness = 1
@@ -48,24 +45,22 @@ function SilentAimFunctions:IsAlive(Player) return Player and Player.Character a
 function SilentAimFunctions:IsVisible(Part) local RayParams = RaycastParams.new(); RayParams.FilterType = Enum.RaycastFilterType.Exclude; RayParams.FilterDescendantsInstances = (SilentAimFunctions:IsAlive(LocalPlayer) and {LocalPlayer.Character, Camera} or {Camera}); RayParams.IgnoreWater = true; local Direction = (Part.Position - Camera.CFrame.Position); local ray = workspace:Raycast(Camera.CFrame.Position, Direction.Unit * 9999, RayParams); return ray and ray.Instance and ray.Instance:IsDescendantOf(Part.Parent) end
 function SilentAimFunctions:GetClosestToCenter() local Closest, Part = Settings.FOV, nil; local CenterScreen = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2); for _,Player in pairs(Players:GetChildren()) do if Player ~= LocalPlayer and SilentAimFunctions:IsAlive(Player) and not (Settings.TeamCheck and Player.Team == LocalPlayer.Team) then local HitPart = Player.Character:FindFirstChild(Settings.HitPart); if HitPart then if not Settings.WallCheck or SilentAimFunctions:IsVisible(HitPart) then local ScreenPosition, OnScreen = Camera:WorldToViewportPoint(HitPart.Position); if OnScreen then local Distance = (CenterScreen - Vector2.new(ScreenPosition.X, ScreenPosition.Y)).Magnitude; if Distance < Closest then Closest = Distance; Part = HitPart end end end end end end; return Part end
 function SilentAimFunctions:Prediction(Part, Muzzlevelosity, Drag) local Distance = (Camera.CFrame.Position - Part.Position).Magnitude; local Time = Distance / Muzzlevelosity; local Speed = Muzzlevelosity - Drag * Muzzlevelosity^2 * Time^2; Time = Time + (Distance / Speed); return Part.CFrame.Position + (Part.Velocity * Time) end
--- [[ INÍCIO DA CORREÇÃO ]] --
-function SilentAimFunctions:BulletDrop(From, To, MuzzleVelocity, Drag, Drop)
-    local Distance = (From - To).Magnitude
-    local Time = Distance / MuzzleVelocity
-    -- A linha abaixo foi corrigida. "Muzzlevelosity" foi trocado por "MuzzleVelocity".
-    local Speed = MuzzleVelocity - Drag * MuzzleVelocity^2 * Time^2
-    Time = Time + (Distance / Speed)
-    local vector = Drop * Time^2
-    return vector
-end
--- [[ FIM DA CORREÇÃO ]] --
+function SilentAimFunctions:BulletDrop(From, To, MuzzleVelocity, Drag, Drop) local Distance = (From - To).Magnitude; local Time = Distance / MuzzleVelocity; local Speed = MuzzleVelocity - Drag * MuzzleVelocity^2 * Time^2; Time = Time + (Distance / Speed); local vector = Drop * Time^2; return vector end
 
 --================================================================================
 -- SISTEMA DE HOOK (CRIAR E DESTRUIR)
 --================================================================================
 local BulletModule = nil; local IsHooked = false
-pcall(function() BulletModule = require(ReplicatedStorage.Modules.FPS.Bullet) end)
-if not BulletModule then warn("Módulo de Bala do Project Delta não encontrado.") end
+print("[DIAGNÓSTICO] Procurando o módulo de bala...")
+pcall(function() 
+    BulletModule = require(ReplicatedStorage.Modules.FPS.Bullet) 
+end)
+
+if BulletModule then
+    print("[DIAGNÓSTICO] SUCESSO! Módulo de bala encontrado.")
+else
+    warn("[DIAGNÓSTICO] FALHA! Módulo de Bala em ReplicatedStorage.Modules.FPS.Bullet não foi encontrado. O Silent Aim NÃO VAI FUNCIONAR.")
+end
 
 local function ActivateHook()
     if IsHooked or not BulletModule or not hookfunction or not newcclosure then return end
@@ -73,20 +68,27 @@ local function ActivateHook()
     local OldBullet; OldBullet = hookfunction(BulletModule.CreateBullet, newcclosure(function(...)
         local Args = {...}
         if Settings.SilentAimEnabled and not checkcaller() then
+            -- print("[DIAGNÓSTICO] Função CreateBullet foi chamada (hooked)!") -- Descomente para spammar o console a cada tiro
             local Target = SilentAimFunctions:GetClosestToCenter()
             if Target then
-                -- [!] INÍCIO DA NOVA VERIFICAÇÃO DE SEGURANÇA
+                print("[DIAGNÓSTICO] Alvo encontrado:", Target.Name, "Dono:", Target.Parent.Name)
                 local RecoilTable = Args[9]
                 local AmmoType = ReplicatedStorage.AmmoTypes:FindFirstChild(tostring(Args[6]))
 
                 if AmmoType and typeof(RecoilTable) == "table" then
-                    pcall(function()
-                        local Prediction = SilentAimFunctions:Prediction(Target, AmmoType:GetAttribute("MuzzleVelocity"), AmmoType:GetAttribute("Drag"))
-                        local PredictedDrop = SilentAimFunctions:BulletDrop(Camera.CFrame.Position, Prediction, AmmoType:GetAttribute("MuzzleVelocity"), AmmoType:GetAttribute("Drag"), AmmoType:GetAttribute("ProjectileDrop"))
-                        RecoilTable.CFrame = CFrame.new(RecoilTable.CFrame.Position, Prediction + Vector3.new(0, PredictedDrop, 0))
-                    end)
+                    print("[DIAGNÓSTICO] Tipo de munição e tabela de recoil são válidos. Tentando calcular...")
+                    -- REMOVI O PCALL PARA VER O ERRO EXATO
+                    local Prediction = SilentAimFunctions:Prediction(Target, AmmoType:GetAttribute("MuzzleVelocity"), AmmoType:GetAttribute("Drag"))
+                    local PredictedDrop = SilentAimFunctions:BulletDrop(Camera.CFrame.Position, Prediction, AmmoType:GetAttribute("MuzzleVelocity"), AmmoType:GetAttribute("Drag"), AmmoType:GetAttribute("ProjectileDrop"))
+                    RecoilTable.CFrame = CFrame.new(RecoilTable.CFrame.Position, Prediction + Vector3.new(0, PredictedDrop, 0))
+                    print("[DIAGNÓSTICO] CÁLCULO BEM SUCEDIDO! CFrame da bala foi modificado.")
+                else
+                    warn("[DIAGNÓSTICO] FALHA no cálculo: AmmoType ou RecoilTable inválidos.")
+                    print("[DIAGNÓSTICO] AmmoType encontrado:", AmmoType)
+                    print("[DIAGNÓSTICO] Tipo de RecoilTable:", typeof(RecoilTable))
                 end
-                -- [!] FIM DA NOVA VERIFICAÇÃO DE SEGURANÇA
+            else
+                -- print("[DIAGNÓSTICO] Nenhum alvo válido encontrado no FOV.") -- Descomente para spammar o console
             end
         end
         return OldBullet(unpack(Args))
@@ -104,6 +106,7 @@ end
 --================================================================================
 -- CONEXÕES DOS BOTÕES
 --================================================================================
+-- (A lógica dos botões continua a mesma)
 local function UpdateButtonState(button, isActive, textPrefix) button.Text = textPrefix .. (isActive and "ON" or "OFF"); button:SetAttribute("IsActive", isActive); local targetColor = isActive and COLOR_ACCENT or COLOR_OFF; TweenService:Create(button, TweenInfo.new(0.2), {BackgroundColor3 = targetColor}):Play() end
 UpdateButtonState(aimbotEnableButton, Settings.AimbotEnabled, "Aimbot: "); UpdateButtonState(silentAimEnableButton, Settings.SilentAimEnabled, "Silent Aim: "); UpdateButtonState(predictionButton, Settings.Prediction, "Prediction: "); UpdateButtonState(aimbotWallCheckButton, Settings.WallCheck, "WallCheck: "); UpdateButtonState(aimbotTeamCheckButton, Settings.TeamCheck, "TeamCheck: "); UpdateButtonState(aimbotShowFovButton, Settings.ShowFov, "Show FOV: ")
 aimbotEnableButton.MouseButton1Click:Connect(function() Settings.AimbotEnabled = not Settings.AimbotEnabled; if Settings.AimbotEnabled then Settings.SilentAimEnabled = false; DeactivateHook() end; UpdateButtonState(aimbotEnableButton, Settings.AimbotEnabled, "Aimbot: "); UpdateButtonState(silentAimEnableButton, Settings.SilentAimEnabled, "Silent Aim: ") end)
@@ -120,6 +123,7 @@ local menuVisible = true; openCloseButton.MouseButton1Click:Connect(function() m
 --================================================================================
 -- LÓGICA DE RENDERIZAÇÃO
 --================================================================================
+-- (A lógica de renderização continua a mesma)
 local FovCircle = Drawing.new("Circle"); FovCircle.Visible = true; FovCircle.Thickness = 2; FovCircle.Color = Color3.fromRGB(255, 255, 255); FovCircle.Filled = false; FovCircle.NumSides = 64; FovCircle.Radius = 0
 local currentTarget = nil
 RunService.RenderStepped:Connect(function()
@@ -132,7 +136,7 @@ RunService.RenderStepped:Connect(function()
         for _, player in pairs(Players:GetPlayers()) do
             if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") and player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.Health > 0 then
                 if Settings.TeamCheck and player.Team == LocalPlayer.Team then continue end
-                local pos, onScreen = Camera:WorldToViewportPoint(player.Character.HumanoidRootPart.Position); if onScreen then local dist2D = (Vector2.new(pos.X, pos.Y) - CenterScreen).Magnitude; local dist3D = (Camera.CFrame.Position - player.Character.HumanoidRootPart.Position).Magnitude; if dist2D < shortest and dist3D <= Settings.MaxDistance then if Settings.WallCheck and not SilentAimFunctions:IsVisible(player.Character.HumanoidRootPart) then continue end; shortest = dist2D; closest = player end end
+                local pos, onScreen = Camera:WorldToViewportPoint(player.Character.HumanoidRootPart.Position); if onScreen then local dist2D = (Vector2.new(pos.X, pos.Y) - CenterScreen).Magnitude; local dist3D = (Camera.CFrame.Position - player.Character.HumanoidRootPpart.Position).Magnitude; if dist2D < shortest and dist3D <= Settings.MaxDistance then if Settings.WallCheck and not SilentAimFunctions:IsVisible(player.Character.HumanoidRootPart) then continue end; shortest = dist2D; closest = player end end
             end
         end
         if closest then local pos = closest.Character.HumanoidRootPart.Position; Camera.CFrame = Camera.CFrame:Lerp(CFrame.new(Camera.CFrame.Position, pos), Settings.Smoothness) end
