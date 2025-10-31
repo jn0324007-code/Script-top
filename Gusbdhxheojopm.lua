@@ -1,9 +1,8 @@
 --[[
-    Script: Sasiperere.lua (Versão com Depurador Visual do Silent Aim)
-    [!] CORREÇÃO (Silent Aim): A lógica de detecção de alvos estava falhando.
-    - O FOV do Silent Aim agora segue o MOUSE, como a lógica original espera.
-    - Adicionado um "depurador visual": o círculo do FOV fica VERDE quando um
-      alvo válido é encontrado, e BRANCO caso contrário.
+    Script: Sasiperere.lua (Versão Final 100% Mobile)
+    [!] CORREÇÃO MOBILE: A lógica do Silent Aim foi completamente reescrita para
+    procurar alvos a partir do CENTRO DA TELA, em vez da ponta do mouse.
+    O círculo do FOV agora fica sempre fixo no centro para ambos os modos.
 ]]
 
 --================================================================================
@@ -25,7 +24,7 @@ local Settings = {
 }
 
 --================================================================================
--- CRIAÇÃO DA INTERFACE GRÁFICA (GUI) - Sem alterações
+-- CRIAÇÃO DA INTERFACE GRÁFICA (GUI)
 --================================================================================
 local mainGui = Instance.new("ScreenGui", CoreGui); mainGui.Name = "DeleteMob_GUI_Final"; mainGui.ResetOnSpawn = false
 local mainFrame = Instance.new("Frame", mainGui); mainFrame.Name = "DeleteMobF"; mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25); mainFrame.Position = UDim2.new(0.5, -200, 0.5, -200); mainFrame.Size = UDim2.new(0, 400, 0, 400); mainFrame.Draggable = true; mainFrame.Active = true; mainFrame.Visible = true; mainFrame.ClipsDescendants = true
@@ -41,14 +40,32 @@ local function CreateButton(text) local button = Instance.new("TextButton"); but
 local aimbotEnableButton = CreateButton("Aimbot: OFF"); local silentAimEnableButton = CreateButton("Silent Aim: OFF"); local predictionButton = CreateButton("Prediction: ON"); local targetPartButton = CreateButton("Target Part: Head"); local aimbotWallCheckButton = CreateButton("WallCheck: ON"); local aimbotTeamCheckButton = CreateButton("TeamCheck: ON"); local aimbotShowFovButton = CreateButton("Show FOV: OFF"); local fovButton = CreateButton("FOV: 80"); local smoothnessButton = CreateButton("Suavidade: 0.3"); local distanceButton = CreateButton("Distância: 500")
 
 --================================================================================
--- FUNÇÕES DO SILENT AIM (Versão Corrigida)
+-- FUNÇÕES DO SILENT AIM (Versão Mobile Corrigida)
 --================================================================================
 local SilentAimFunctions = {}
 function SilentAimFunctions:IsAlive(Player) return Player and Player.Character and Player.Character:FindFirstChild("HumanoidRootPart") and Player.Character:FindFirstChild("Humanoid") and Player.Character.Humanoid.Health > 0 end
 function SilentAimFunctions:IsVisible(Part) local RayParams = RaycastParams.new(); RayParams.FilterType = Enum.RaycastFilterType.Exclude; RayParams.FilterDescendantsInstances = (SilentAimFunctions:IsAlive(LocalPlayer) and {LocalPlayer.Character, Camera} or {Camera}); RayParams.IgnoreWater = true; local Direction = (Part.Position - Camera.CFrame.Position); local ray = workspace:Raycast(Camera.CFrame.Position, Direction.Unit * 9999, RayParams); return ray and ray.Instance and ray.Instance:IsDescendantOf(Part.Parent) end
-function SilentAimFunctions:GetClosestToMouse() local Closest, Part = Settings.FOV, nil; for _,Player in pairs(Players:GetChildren()) do if Player ~= LocalPlayer and SilentAimFunctions:IsAlive(Player) and not (Settings.TeamCheck and Player.Team == LocalPlayer.Team) then local HitPart = Player.Character:FindFirstChild(Settings.HitPart); if HitPart then if not Settings.WallCheck or SilentAimFunctions:IsVisible(HitPart) then local ScreenPosition, OnScreen = Camera:WorldToViewportPoint(HitPart.Position); if OnScreen then local Distance = (UserInputService:GetMouseLocation() - Vector2.new(ScreenPosition.X, ScreenPosition.Y)).Magnitude; if Distance < Closest then Closest = Distance; Part = HitPart end end end end end end; return Part end
+function SilentAimFunctions:GetClosestToCenter() -- [!] FUNÇÃO CORRIGIDA PARA MOBILE
+    local Closest, Part = Settings.FOV, nil
+    local CenterScreen = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+    for _,Player in pairs(Players:GetChildren()) do
+        if Player ~= LocalPlayer and SilentAimFunctions:IsAlive(Player) and not (Settings.TeamCheck and Player.Team == LocalPlayer.Team) then
+            local HitPart = Player.Character:FindFirstChild(Settings.HitPart)
+            if HitPart then
+                if not Settings.WallCheck or SilentAimFunctions:IsVisible(HitPart) then
+                    local ScreenPosition, OnScreen = Camera:WorldToViewportPoint(HitPart.Position)
+                    if OnScreen then
+                        local Distance = (CenterScreen - Vector2.new(ScreenPosition.X, ScreenPosition.Y)).Magnitude
+                        if Distance < Closest then Closest = Distance; Part = HitPart end
+                    end
+                end
+            end
+        end
+    end
+    return Part
+end
 function SilentAimFunctions:Prediction(Part, Muzzlevelosity, Drag) local Distance = (Camera.CFrame.Position - Part.Position).Magnitude; local Time = Distance / Muzzlevelosity; local Speed = Muzzlevelosity - Drag * Muzzlevelosity^2 * Time^2; Time = Time + (Distance / Speed); return Part.CFrame.Position + (Part.Velocity * Time) end
-function SilentAimFunctions:BulletDrop(From, To, MuzzleVelocity, Drag, Drop) local Distance = (From - To).Magnitude; local Time = Distance / MuzzleVelocity; local Speed = Muzzlevelosity - Drag * MuzzleVelocity^2 * Time^2; Time = Time + (Distance / Speed); local vector = Drop * Time^2; return vector end
+function SilentAimFunctions:BulletDrop(From, To, MuzzleVelocity, Drag, Drop) local Distance = (From - To).Magnitude; local Time = Distance / MuzzleVelocity; local Speed = MuzzleVelocity - Drag * MuzzleVelocity^2 * Time^2; Time = Time + (Distance / Speed); local vector = Drop * Time^2; return vector end
 
 --================================================================================
 -- SISTEMA DE HOOK (CRIAR E DESTRUIR)
@@ -60,7 +77,7 @@ if not BulletModule then warn("Módulo de Bala do Project Delta não encontrado.
 local function ActivateHook()
     if IsHooked or not BulletModule or not hookfunction or not newcclosure then return end
     IsHooked = true
-    local OldBullet; OldBullet = hookfunction(BulletModule.CreateBullet, newcclosure(function(...) local Args = {...}; if Settings.SilentAimEnabled and not checkcaller() then local Target = SilentAimFunctions:GetClosestToMouse(); if Target then pcall(function() local AmmoType = ReplicatedStorage.AmmoTypes[tostring(Args[6])]; local Prediction = SilentAimFunctions:Prediction(Target, AmmoType:GetAttribute("MuzzleVelocity"), AmmoType:GetAttribute("Drag")); local PredictedDrop = SilentAimFunctions:BulletDrop(Camera.CFrame.Position, Prediction, AmmoType:GetAttribute("MuzzleVelocity"), AmmoType:GetAttribute("Drag"), AmmoType:GetAttribute("ProjectileDrop")); Args[9].CFrame = CFrame.new(Args[9].CFrame.Position, Prediction + Vector3.new(0, PredictedDrop, 0)) end) end end; return OldBullet(unpack(Args)) end))
+    local OldBullet; OldBullet = hookfunction(BulletModule.CreateBullet, newcclosure(function(...) local Args = {...}; if Settings.SilentAimEnabled and not checkcaller() then local Target = SilentAimFunctions:GetClosestToCenter(); if Target then pcall(function() local AmmoType = ReplicatedStorage.AmmoTypes[tostring(Args[6])]; local Prediction = SilentAimFunctions:Prediction(Target, AmmoType:GetAttribute("MuzzleVelocity"), AmmoType:GetAttribute("Drag")); local PredictedDrop = SilentAimFunctions:BulletDrop(Camera.CFrame.Position, Prediction, AmmoType:GetAttribute("MuzzleVelocity"), AmmoType:GetAttribute("Drag"), AmmoType:GetAttribute("ProjectileDrop")); Args[9].CFrame = CFrame.new(Args[9].CFrame.Position, Prediction + Vector3.new(0, PredictedDrop, 0)) end) end end; return OldBullet(unpack(Args)) end))
     warn("Hook do Silent Aim ATIVADO.")
 end
 
@@ -91,19 +108,18 @@ local menuVisible = true; openCloseButton.MouseButton1Click:Connect(function() m
 -- LÓGICA DE RENDERIZAÇÃO
 --================================================================================
 local FovCircle = Drawing.new("Circle"); FovCircle.Visible = true; FovCircle.Thickness = 2; FovCircle.Color = Color3.fromRGB(255, 255, 255); FovCircle.Filled = false; FovCircle.NumSides = 64; FovCircle.Radius = 0
-local currentTarget = nil -- Para o depurador
+local currentTarget = nil
 
 RunService.RenderStepped:Connect(function()
     if Settings.ShowFov then
         FovCircle.Radius = Settings.FOV
+        FovCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+        
         if Settings.SilentAimEnabled then
-            -- Se Silent Aim estiver ligado, FOV segue o mouse e vira depurador
-            FovCircle.Position = UserInputService:GetMouseLocation()
-            currentTarget = SilentAimFunctions:GetClosestToMouse()
+            -- Depurador visual para o Silent Aim
+            currentTarget = SilentAimFunctions:GetClosestToCenter()
             FovCircle.Color = currentTarget and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 255, 255)
         else
-            -- Se Aimbot normal estiver ligado, FOV fica no centro e branco
-            FovCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
             FovCircle.Color = Color3.fromRGB(255, 255, 255)
         end
     else
@@ -112,12 +128,13 @@ RunService.RenderStepped:Connect(function()
 
     if Settings.AimbotEnabled then
         local closest, shortest = nil, Settings.FOV
+        local CenterScreen = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
         for _, player in pairs(Players:GetPlayers()) do
             if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") and player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.Health > 0 then
                 if Settings.TeamCheck and player.Team == LocalPlayer.Team then continue end
                 local pos, onScreen = Camera:WorldToViewportPoint(player.Character.HumanoidRootPart.Position)
                 if onScreen then
-                    local dist2D = (Vector2.new(pos.X, pos.Y) - Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)).Magnitude
+                    local dist2D = (Vector2.new(pos.X, pos.Y) - CenterScreen).Magnitude
                     local dist3D = (Camera.CFrame.Position - player.Character.HumanoidRootPart.Position).Magnitude
                     if dist2D < shortest and dist3D <= Settings.MaxDistance then
                         if Settings.WallCheck and not SilentAimFunctions:IsVisible(player.Character.HumanoidRootPart) then continue end
