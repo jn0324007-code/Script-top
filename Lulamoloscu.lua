@@ -48,7 +48,17 @@ function SilentAimFunctions:IsAlive(Player) return Player and Player.Character a
 function SilentAimFunctions:IsVisible(Part) local RayParams = RaycastParams.new(); RayParams.FilterType = Enum.RaycastFilterType.Exclude; RayParams.FilterDescendantsInstances = (SilentAimFunctions:IsAlive(LocalPlayer) and {LocalPlayer.Character, Camera} or {Camera}); RayParams.IgnoreWater = true; local Direction = (Part.Position - Camera.CFrame.Position); local ray = workspace:Raycast(Camera.CFrame.Position, Direction.Unit * 9999, RayParams); return ray and ray.Instance and ray.Instance:IsDescendantOf(Part.Parent) end
 function SilentAimFunctions:GetClosestToCenter() local Closest, Part = Settings.FOV, nil; local CenterScreen = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2); for _,Player in pairs(Players:GetChildren()) do if Player ~= LocalPlayer and SilentAimFunctions:IsAlive(Player) and not (Settings.TeamCheck and Player.Team == LocalPlayer.Team) then local HitPart = Player.Character:FindFirstChild(Settings.HitPart); if HitPart then if not Settings.WallCheck or SilentAimFunctions:IsVisible(HitPart) then local ScreenPosition, OnScreen = Camera:WorldToViewportPoint(HitPart.Position); if OnScreen then local Distance = (CenterScreen - Vector2.new(ScreenPosition.X, ScreenPosition.Y)).Magnitude; if Distance < Closest then Closest = Distance; Part = HitPart end end end end end end; return Part end
 function SilentAimFunctions:Prediction(Part, Muzzlevelosity, Drag) local Distance = (Camera.CFrame.Position - Part.Position).Magnitude; local Time = Distance / Muzzlevelosity; local Speed = Muzzlevelosity - Drag * Muzzlevelosity^2 * Time^2; Time = Time + (Distance / Speed); return Part.CFrame.Position + (Part.Velocity * Time) end
-function SilentAimFunctions:BulletDrop(From, To, MuzzleVelocity, Drag, Drop) local Distance = (From - To).Magnitude; local Time = Distance / MuzzleVelocity; local Speed = Muzzlevelosity - Drag * Muzzlevelosity^2 * Time^2; Time = Time + (Distance / Speed); local vector = Drop * Time^2; return vector end
+-- [[ INÍCIO DA CORREÇÃO ]] --
+function SilentAimFunctions:BulletDrop(From, To, MuzzleVelocity, Drag, Drop)
+    local Distance = (From - To).Magnitude
+    local Time = Distance / MuzzleVelocity
+    -- A linha abaixo foi corrigida. "Muzzlevelosity" foi trocado por "MuzzleVelocity".
+    local Speed = MuzzleVelocity - Drag * MuzzleVelocity^2 * Time^2
+    Time = Time + (Distance / Speed)
+    local vector = Drop * Time^2
+    return vector
+end
+-- [[ FIM DA CORREÇÃO ]] --
 
 --================================================================================
 -- SISTEMA DE HOOK (CRIAR E DESTRUIR)
